@@ -1,0 +1,12 @@
+name: Validate
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validation:
+    uses: SpencerRWood/workflows/.github/workflows/validate.yml@v3

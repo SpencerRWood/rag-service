@@ -1,0 +1,25 @@
+version = 1
+
+[python]
+version = "3.14"
+
+[validation]
+checks = ["ruff", "ruff-format", "mypy", "pytest", "pytest-coverage", "docker-compose", "pre-commit"]
+
+[coverage]
+target = "rag_service"
+
+[build]
+python_package = true
+
+[container]
+publish = true
+image_name = "rag-service"
+
+[dagster]
+runtime_validation = true
+smoke_job = "runtime_smoke_job"
+grpc_port = 4000
+
+[release]
+semantic_release = true
