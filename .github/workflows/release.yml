@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    uses: SpencerRWood/workflows/.github/workflows/release-container.yml@v3
+    permissions:
+      contents: write
+      packages: write
+
+  promotion:
+    needs: release
+    if: ${{ needs.release.outputs.released == 'true' }}
+    uses: SpencerRWood/workflows/.github/workflows/promote-container-to-dev.yml@v2
+    permissions:
+      contents: read
+    with:
+      infrastructure_repository: SpencerRWood/infrastructure
+      image_name: rag-service
+      image_key: rag_service_image_ref
+      release_tag: ${{ needs.release.outputs.release_tag }}
+      image_repository: ${{ needs.release.outputs.image_repository }}
+      version_image: ${{ needs.release.outputs.version_image }}
+      image_digest: ${{ needs.release.outputs.image_digest }}
+      version_image_digest: ${{ needs.release.outputs.version_image_digest }}
+    secrets:
+      infrastructure_token: ${{ secrets.INFRASTRUCTURE_PR_TOKEN }}
