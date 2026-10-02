@@ -30,6 +30,7 @@ dependencies = [
   "pydantic-settings>=2.10",
   "pgvector>=0.4",
   "boto3>=1.40",
+  "python-multipart>=0.0.32",
 ]
 
 [dependency-groups]
