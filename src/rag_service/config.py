@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     database_url: SecretStr = SecretStr("")
     storage_backend: Literal["filesystem", "s3"] = "filesystem"
     storage_path: Path = Path("./data/documents")
+    max_upload_bytes: int = Field(default=25 * 1024 * 1024, gt=0)
     s3_bucket: str = ""
     s3_endpoint: str | None = None
     s3_region: str = "us-east-1"

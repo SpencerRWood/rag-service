@@ -12,10 +12,10 @@ provenance-rich chunks, and expose retrieval over HTTP.
 - Configurable filesystem or S3-compatible source storage
 - Local Qwen3 embeddings by default, with optional OpenRouter overrides
 
-The foundation implements knowledge-base configuration, versioned tenant and
-knowledge-base persistence, portable original-file storage, and an importable
-Dagster code location. The OpenProject R1 backlog adds document lifecycle,
-processing, retrieval, MCP, and operational diagnostics in subsequent stories.
+The service implements knowledge-base configuration, durable document/source
+version history, portable original-file storage, and an importable Dagster code
+location. The OpenProject R1 backlog adds processing, retrieval, MCP, and
+operational diagnostics in subsequent stories.
 
 The repository follows `SpencerRWood/template-fastapi-service`. Its Dagster
 `Definitions`, asset, asset job, typed resource, and secret-free runtime smoke
@@ -64,6 +64,52 @@ configuration. Requests use the migrated default tenant. `/health` is liveness
 only; `/version` exposes package version and non-sensitive
 `RAG_SOURCE_REVISION`/`RAG_RELEASE_REVISION` supplied by infrastructure. Missing
 revision values are reported as `unknown`.
+
+## Document lifecycle
+
+`POST /knowledge-bases/{kb}/documents` accepts multipart `file` and an optional
+`metadata` JSON form field containing `title`, `tags`, `source`, and
+`connector_metadata`. The response contains `document`, `version`, and `created`.
+An identical SHA-256 checksum within the knowledge base returns the existing
+document and source version with HTTP 200; new content returns HTTP 201. Identical
+content in another knowledge base creates an independent identity. Filenames do
+not determine identity, and retries preserve existing metadata and lifecycle state.
+
+`POST /knowledge-bases/{kb}/documents/{doc}/versions` uploads changed source bytes
+for an explicit document. Each distinct source gets a monotonically increasing
+version number; retrying any historical source returns its original version ID.
+Content already owned by another document in the knowledge base returns HTTP 409.
+`PATCH /knowledge-bases/{kb}/documents/{doc}` updates only supplied metadata fields.
+
+Document list/get endpoints expose `latest_version_id`, `active_version_id`, and
+the latest attempted version's `status`. Version list/get endpoints expose
+checksum, source filename, byte size, and lifecycle state. Lists support bounded
+`limit`/`offset` pagination. Download exact original bytes with
+`GET /knowledge-bases/{kb}/documents/{doc}/versions/{version}/original`.
+
+Uploads store originals and enter `pending`; they are not declared successfully
+processed by HTTP callers. The internal `transition_version` boundary supports
+`pending → processing → ready/failed` and explicit `failed → processing` retries.
+The active source is the highest numbered successfully ready version. Failed,
+pending, or late-finishing older versions cannot displace a newer ready source.
+Dagster execution and derived processing generations are subsequent work.
+
+`DELETE /knowledge-bases/{kb}/documents/{doc}` is retry-safe soft deletion.
+Normal reads, uploads to that document, and processing exclude deleted identities;
+explicit `include_deleted=true` on reads exposes retained metadata, versions, and
+originals. Checksums remain reserved: re-uploading a deleted document's content
+returns HTTP 409 rather than recreating it. Restoration is outside this API.
+
+Mutations serialize on a knowledge-base database row, with uniqueness and scope
+constraints guarding source identity. The lock spans storage and commit, trading
+per-knowledge-base upload throughput for simple retry safety. Deterministic storage
+keys tolerate interruption between storage and commit. Failed storage retains a
+failed source reservation, and an identical retry repairs it without creating a
+new version. Such failures return a safe HTTP 503; previous ready sources remain
+active. An interrupted uncommitted write may leave an unreferenced original;
+garbage collection is outside this story. `RAG_MAX_UPLOAD_BYTES` bounds the bytes
+read into application memory (default 25 MiB); oversized originals return HTTP 413.
+Infrastructure should also cap request sizes before multipart parsing/spooling.
 
 ## Dagster code location
 
