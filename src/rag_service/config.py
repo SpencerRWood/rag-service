@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     chunk_size: int = Field(default=512, gt=0)
     chunk_overlap: int = Field(default=64, ge=0)
     dagster_url: str = "http://localhost:3000"
+    dagster_location: str = "rag-service"
     source_revision: str = "unknown"
     release_revision: str = "unknown"
 

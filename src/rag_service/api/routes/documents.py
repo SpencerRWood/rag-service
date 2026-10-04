@@ -31,7 +31,11 @@ from sqlalchemy.orm import Session
 
 from rag_service.api.routes.knowledge_bases import SessionDependency
 from rag_service.config import Settings
-from rag_service.models.persistence import Document, DocumentVersion
+from rag_service.models.persistence import (
+    Document,
+    DocumentVersion,
+    ProcessingGeneration,
+)
 from rag_service.services.documents import (
     DocumentConflictError,
     DocumentNotFoundError,
@@ -43,6 +47,7 @@ from rag_service.services.documents import (
     soft_delete,
     upload_original,
 )
+from rag_service.services.processing import reserve_generation, submit_processing
 from rag_service.storage import FileStorage, build_storage
 
 router = APIRouter(
@@ -98,6 +103,7 @@ class DocumentRead(DocumentMetadata):
     status: str
     latest_version_id: UUID
     active_version_id: UUID | None
+    active_processing_generation_id: UUID | None
 
 
 class UploadRead(BaseModel):
@@ -106,6 +112,9 @@ class UploadRead(BaseModel):
     document: DocumentRead
     version: VersionRead
     created: bool
+    generation_id: UUID
+    dagster_run_id: str | None
+    launch_submitted: bool
 
 
 def document_session(session: SessionDependency) -> Iterator[Session]:
@@ -166,6 +175,17 @@ def document_read(session: Session, document: Document) -> DocumentRead:
         status="deleted" if document.deleted_at is not None else latest.status,
         latest_version_id=latest.id,
         active_version_id=active,
+        active_processing_generation_id=session.scalar(
+            select(ProcessingGeneration.id)
+            .where(
+                ProcessingGeneration.version_id == active,
+                ProcessingGeneration.status == "ready",
+            )
+            .order_by(ProcessingGeneration.number.desc())
+            .limit(1)
+        )
+        if active
+        else None,
     )
 
 
@@ -217,10 +237,17 @@ def create_document(  # noqa: PLR0913, PLR0917 -- HTTP path/form/dependency para
     )
     if not created:
         response.status_code = status.HTTP_200_OK
+    generation, attempt = reserve_generation(
+        session, knowledge_base_id, document.id, version.id, "ingest"
+    )
+    submit_processing(session, request.app.state.settings, generation, attempt)
     return UploadRead(
         document=document_read(session, document),
         version=VersionRead.model_validate(version),
         created=created,
+        generation_id=generation.id,
+        dagster_run_id=attempt.dagster_run_id,
+        launch_submitted=attempt.submitted,
     )
 
 
@@ -247,10 +274,17 @@ def create_version(  # noqa: PLR0913, PLR0917 -- HTTP path/form/dependency param
     )
     if not created:
         response.status_code = status.HTTP_200_OK
+    generation, attempt = reserve_generation(
+        session, knowledge_base_id, document.id, version.id, "ingest"
+    )
+    submit_processing(session, request.app.state.settings, generation, attempt)
     return UploadRead(
         document=document_read(session, document),
         version=VersionRead.model_validate(version),
         created=created,
+        generation_id=generation.id,
+        dagster_run_id=attempt.dagster_run_id,
+        launch_submitted=attempt.submitted,
     )
 
 
