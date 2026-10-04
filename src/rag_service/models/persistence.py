@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -123,3 +124,86 @@ class DocumentVersion(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
+
+
+class ParsedContent(Base):
+    """Normalized parser output, reusable independently of derived chunks."""
+
+    __tablename__ = "parsed_contents"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    version_id: Mapped[UUID] = mapped_column(ForeignKey("document_versions.id"))
+    parser_name: Mapped[str] = mapped_column(String(64))
+    parser_version: Mapped[str] = mapped_column(String(64))
+    segments: Mapped[list[dict[str, object]]] = mapped_column(JSON)
+    parsed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+class ProcessingGeneration(Base):
+    """Idempotent operation identity and immutable effective chunking settings."""
+
+    __tablename__ = "processing_generations"
+    __table_args__ = (
+        UniqueConstraint("version_id", "operation_key", name="uq_processing_operation"),
+        UniqueConstraint("version_id", "number", name="uq_processing_number"),
+        CheckConstraint("number > 0", name="ck_processing_number"),
+        CheckConstraint("chunk_size > 0", name="ck_processing_chunk_size"),
+        CheckConstraint(
+            "chunk_overlap >= 0 AND chunk_overlap < chunk_size",
+            name="ck_processing_overlap",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'ready', 'failed')",
+            name="ck_processing_status",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    version_id: Mapped[UUID] = mapped_column(ForeignKey("document_versions.id"))
+    operation_key: Mapped[str] = mapped_column(String(255))
+    number: Mapped[int]
+    job_name: Mapped[str] = mapped_column(String(64))
+    reparse: Mapped[bool] = mapped_column(default=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    chunk_size: Mapped[int]
+    chunk_overlap: Mapped[int]
+    parsed_content_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("parsed_contents.id")
+    )
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ProcessingAttempt(Base):
+    """Durable launch reservation survives ambiguous network outcomes/restarts."""
+
+    __tablename__ = "processing_attempts"
+    __table_args__ = (
+        UniqueConstraint("generation_id", "request_key", name="uq_attempt_request"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    generation_id: Mapped[UUID] = mapped_column(ForeignKey("processing_generations.id"))
+    request_key: Mapped[str] = mapped_column(String(255))
+    submitted: Mapped[bool] = mapped_column(default=False)
+    dagster_run_id: Mapped[str | None] = mapped_column(String(255))
+
+
+class Chunk(Base):
+    """Ordered, provenance-rich derived text belonging to one generation."""
+
+    __tablename__ = "chunks"
+    __table_args__ = (
+        UniqueConstraint("generation_id", "ordinal", name="uq_chunk_ordinal"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    generation_id: Mapped[UUID] = mapped_column(ForeignKey("processing_generations.id"))
+    ordinal: Mapped[int]
+    text: Mapped[str] = mapped_column(Text)
+    provenance: Mapped[dict[str, object]] = mapped_column(JSON)

@@ -10,7 +10,15 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 
+from rag_service.dagster.launch import DagsterLauncher
+
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def isolate_dagster_launch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """API lifecycle tests reserve runs without contacting a real control plane."""
+    monkeypatch.setattr(DagsterLauncher, "launch", lambda *_args: str(uuid4()))
 
 
 @pytest.fixture

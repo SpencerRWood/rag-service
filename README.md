@@ -13,8 +13,8 @@ provenance-rich chunks, and expose retrieval over HTTP.
 - Local Qwen3 embeddings by default, with optional OpenRouter overrides
 
 The service implements knowledge-base configuration, durable document/source
-version history, portable original-file storage, and an importable Dagster code
-location. The OpenProject R1 backlog adds processing, retrieval, MCP, and
+version history, portable original-file storage, asynchronous parsing/chunking,
+and an importable Dagster code location. The OpenProject R1 backlog adds retrieval, MCP, and
 operational diagnostics in subsequent stories.
 
 The repository follows `SpencerRWood/template-fastapi-service`. Its Dagster
@@ -69,7 +69,8 @@ revision values are reported as `unknown`.
 
 `POST /knowledge-bases/{kb}/documents` accepts multipart `file` and an optional
 `metadata` JSON form field containing `title`, `tags`, `source`, and
-`connector_metadata`. The response contains `document`, `version`, and `created`.
+`connector_metadata`. The response contains `document`, `version`, `created`,
+`generation_id`, `dagster_run_id`, and `launch_submitted`.
 An identical SHA-256 checksum within the knowledge base returns the existing
 document and source version with HTTP 200; new content returns HTTP 201. Identical
 content in another knowledge base creates an independent identity. Filenames do
@@ -92,7 +93,62 @@ processed by HTTP callers. The internal `transition_version` boundary supports
 `pending → processing → ready/failed` and explicit `failed → processing` retries.
 The active source is the highest numbered successfully ready version. Failed,
 pending, or late-finishing older versions cannot displace a newer ready source.
-Dagster execution and derived processing generations are subsequent work.
+Dagster jobs now own parsing and chunking. Processing `ready` means those derived
+artifacts are complete; embedding/index readiness belongs to the retrieval Story.
+
+### Asynchronous processing
+
+Uploads reserve a processing generation and submit `ingestion_job` through the
+shared Dagster GraphQL endpoint. The API makes bounded metadata requests and does
+not parse, chunk, or invoke models. If submission is unavailable or its response
+is lost, the original and launch reservation remain durable; `launch_submitted`
+is false and `dagster_run_id` is null until recovery. The enabled
+`recover_launches` sensor repairs interrupted reservations and submissions in
+batches of 50. This is recovery of explicit API operations, not connector scheduling.
+`RAG_DAGSTER_URL` and `RAG_DAGSTER_LOCATION` select the shared control plane and
+registered code location. Dagster assigns run IDs, persists their states/events,
+and executes jobs outside the API process. Run config/tags contain opaque IDs.
+
+`POST /knowledge-bases/{kb}/documents/{doc}/versions/{version}/reprocess` accepts
+`{"reparse": false}` (or `{}`) and a required `Idempotency-Key` header. A new key
+reserves a new derived generation and snapshots effective knowledge-base chunk
+settings; it never creates another source version. Repeating the key returns the
+same generation/run. Reusing it with different options returns HTTP 409. Stored
+parsed content is reused by default; `reparse: true` explicitly selects a new parse.
+
+`POST /knowledge-bases/{kb}/documents/{doc}/versions/{version}/generations/{generation}/retry`
+also requires `Idempotency-Key` and retries a failed generation without re-upload.
+The same retry key returns the same attempt even after completion. A new retry
+key requires failed state. Both endpoints return HTTP 202 with `generation`,
+`dagster_run_id`, and `launch_submitted`.
+`GET /knowledge-bases/{kb}/documents/{doc}/versions/{version}/generations` returns
+bounded generation history, status, parse checkpoint, timestamps, safe error code,
+and snapshotted chunk settings. Document reads additionally report
+`active_processing_generation_id`, the highest numbered ready generation of the
+active source. Dagster's UI/API supplies the durable orchestration run state.
+
+PDF uses pypdf; DOCX uses python-docx; HTML uses Beautiful Soup; CSV uses the
+standard csv module; XLSX uses openpyxl; Markdown, plain text, and source code use
+strict UTF-8 decoding with section/line extraction. Parsed segments and parser
+name/version/time are stored separately from chunks. LlamaIndex consumes those
+normalized segments with a deterministic whitespace tokenizer: chunk size and
+overlap count whitespace tokens, with splits bounded by source units. Every
+CSV/XLSX row chunk repeats its table header and retains sheet, row and column
+context; repeated headers are additional context outside the body token budget.
+Other chunks retain page, section, paragraph, or source path/line range when
+available. Empty/scanned PDFs without extractable text fail safely; OCR is outside
+this Story. Originals with unsupported binary/text encodings remain downloadable.
+
+Processing uses the existing knowledge-base mutation lock for each stage. Parsing
+commits a reusable checkpoint; chunk publication and ready state commit atomically.
+Interrupted uncommitted work rolls back. Duplicate runs and automatic Dagster step
+retries reuse the same generation, and completed work is a no-op. Failed source
+versions or reprocessing never clear previous ready source/generation state.
+The recovery sensor reconciles terminal failed/canceled Dagster runs into retryable
+application failures. Infrastructure enables shared Dagster run monitoring so dead
+workers become terminal runs. A queued run remains pending while its daemon is
+unavailable. Per-knowledge-base serialization trades ingestion throughput for
+transactional safety; processing can delay other mutations in that knowledge base.
 
 `DELETE /knowledge-bases/{kb}/documents/{doc}` is retry-safe soft deletion.
 Normal reads, uploads to that document, and processing exclude deleted identities;
@@ -124,7 +180,10 @@ uv run dagster api grpc -m rag_service.dagster.definitions -h 0.0.0.0 -p 4000
 
 `configuration_job` proves asset/resource configuration without processing
 documents. `runtime_smoke_job` uses the template's in-process executor and
-memory IO manager, with no application secrets or external API dependencies.
+memory IO manager. Inside the centralized candidate-image gate it exercises
+parsing, provenance, transactions, and completed-operation replay in a disposable
+schema using the gate's PostgreSQL credentials. Local smoke tests use temporary
+SQLite. It never reads the real RAG database/originals or calls model providers.
 
 ## Delivery and tracking
 
