@@ -24,10 +24,59 @@ from rag_service.models.retrieval import (
     RetrievalRequest,
     RetrievalResponse,
     RetrievalResult,
+    SourceEvidence,
     SourceProvenance,
 )
 from rag_service.services.documents import DocumentNotFoundError, require_knowledge_base
 from rag_service.services.embeddings import build_embedding
+
+
+def source_evidence(
+    chunk: Chunk, document: Document, version: DocumentVersion
+) -> SourceEvidence:
+    """Assemble one transport-independent, source-backed chunk."""
+    return SourceEvidence(
+        chunk_id=chunk.id,
+        document_id=document.id,
+        version_id=version.id,
+        text=chunk.text,
+        source=SourceProvenance(
+            filename=version.filename,
+            media_type=version.media_type,
+            checksum=version.checksum,
+            location=chunk.provenance,
+        ),
+        metadata=DocumentMetadata(
+            title=document.title,
+            tags=document.tags,
+            source=document.source,
+            connector_metadata=document.connector_metadata,
+        ),
+    )
+
+
+def fetch_chunk(
+    session: Session, knowledge_base_id: UUID, chunk_id: UUID
+) -> SourceEvidence:
+    """Read exact indexed evidence, including retained completed history."""
+    require_knowledge_base(session, knowledge_base_id)
+    row = session.execute(
+        select(Chunk, Document, DocumentVersion)
+        .join(IndexedChunk, IndexedChunk.chunk_id == Chunk.id)
+        .join(ProcessingGeneration, ProcessingGeneration.id == Chunk.generation_id)
+        .join(DocumentVersion, DocumentVersion.id == ProcessingGeneration.version_id)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(
+            Chunk.id == chunk_id,
+            Document.knowledge_base_id == knowledge_base_id,
+            Document.deleted_at.is_(None),
+            ProcessingGeneration.status == "ready",
+            ProcessingGeneration.index_generation_id.is_not(None),
+        )
+    ).one_or_none()
+    if row is None:
+        raise DocumentNotFoundError
+    return source_evidence(*row)
 
 
 def candidates(
@@ -162,23 +211,8 @@ class PgVectorRetriever(BaseRetriever):
         nodes = []
         for chunk, _indexed, document, version, score in rows:
             result = RetrievalResult(
-                chunk_id=chunk.id,
-                document_id=document.id,
-                version_id=version.id,
-                text=chunk.text,
+                **source_evidence(chunk, document, version).model_dump(),
                 score=max(-1.0, min(1.0, score)),
-                source=SourceProvenance(
-                    filename=version.filename,
-                    media_type=version.media_type,
-                    checksum=version.checksum,
-                    location=chunk.provenance,
-                ),
-                metadata=DocumentMetadata(
-                    title=document.title,
-                    tags=document.tags,
-                    source=document.source,
-                    connector_metadata=document.connector_metadata,
-                ),
             )
             nodes.append(
                 NodeWithScore(

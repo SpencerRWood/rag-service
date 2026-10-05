@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 from rag_service.api.router import api_router
 from rag_service.config import Settings, load_settings
 from rag_service.database import create_session_factory
+from rag_service.mcp import create_mcp
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -20,11 +21,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.database_url.get_secret_value()
         else None
     )
+    mcp = create_mcp(settings, session_factory)
+    mcp_app = mcp.streamable_http_app()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         try:
-            yield
+            async with mcp.session_manager.run():
+                yield
         finally:
             engine = session_factory.kw.get("bind") if session_factory else None
             if isinstance(engine, Engine):
@@ -35,7 +39,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.session_factory = session_factory
+    app.state.mcp = mcp
     app.include_router(api_router)
+    app.mount("/", mcp_app)
     return app
 
 
