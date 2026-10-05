@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from dagster import DagsterInstance
 from dagster_postgres import PostgresRunStorage
+from llama_index.core.embeddings import MockEmbedding
 from pydantic import SecretStr
 from sqlalchemy import create_engine, make_url, select, text
 
@@ -15,6 +16,7 @@ from rag_service.models.persistence import (
     DEFAULT_TENANT_ID,
     Base,
     Chunk,
+    IndexedChunk,
     KnowledgeBase,
     ParsedContent,
     Tenant,
@@ -39,9 +41,12 @@ def verify_processing_runtime(instance: DagsterInstance) -> None:
             url = make_url(instance.run_storage.postgres_url)
             admin = create_engine(url, hide_parameters=True)
             with admin.begin() as connection:
+                connection.execute(
+                    text("CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public")
+                )
                 connection.execute(text(f'CREATE SCHEMA "{schema}"'))
             database_url = url.update_query_dict(
-                {"options": f"-csearch_path={schema}"}
+                {"options": f"-csearch_path={schema},public"}
             ).render_as_string(hide_password=False)
         settings = Settings(
             database_url=SecretStr(database_url),
@@ -77,14 +82,22 @@ def verify_processing_runtime(instance: DagsterInstance) -> None:
                 generation, _ = reserve_generation(
                     session, kb.id, document.id, source.id, "ingest"
                 )
-                process_generation(session, storage, generation.id)
-                process_generation(session, storage, generation.id)
+                fixture_embedding = MockEmbedding(embed_dim=1)
+                process_generation(
+                    session, storage, generation.id, settings, fixture_embedding
+                )
+                process_generation(
+                    session, storage, generation.id, settings, fixture_embedding
+                )
                 chunks = list(session.scalars(select(Chunk)))
+                vectors = list(session.scalars(select(IndexedChunk)))
                 parsed = list(session.scalars(select(ParsedContent)))
                 if (
                     generation.status != "ready"
                     or len(chunks) != 2
                     or len(parsed) != 1
+                    or len(vectors) != 2
+                    or any(vector.dimensions != 1 for vector in vectors)
                     or chunks[0].provenance["row_start"] != 2
                 ):
                     raise RuntimeError("Candidate processing fixture failed")

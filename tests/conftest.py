@@ -11,8 +11,22 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 from rag_service.dagster.launch import DagsterLauncher
+from rag_service.services.embeddings import EndpointEmbedding
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def isolate_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Processing fixtures use deterministic vectors; provider tests restore HTTP."""
+
+    def fixture_vectors(
+        self: EndpointEmbedding, texts: list[str], *, query: bool
+    ) -> list[list[float]]:
+        del query
+        return [[1.0] + [0.0] * (self.dimensions - 1) for _ in texts]
+
+    monkeypatch.setattr(EndpointEmbedding, "_request", fixture_vectors)
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +45,7 @@ def migrated_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterat
         with admin.begin() as connection:
             connection.execute(text(f'CREATE SCHEMA "{schema}"'))
         url = admin.url.update_query_dict(
-            {"options": f"-csearch_path={schema}"}
+            {"options": f"-csearch_path={schema},public"}
         ).render_as_string(hide_password=False)
     else:
         url = f"sqlite:///{tmp_path / 'rag.db'}"

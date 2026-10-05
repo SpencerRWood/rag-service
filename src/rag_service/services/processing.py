@@ -4,11 +4,12 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
+from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from rag_service.config import Settings
+from rag_service.config import Settings, load_settings
 from rag_service.dagster.launch import DagsterLauncher, LaunchUnavailableError
 from rag_service.models.persistence import (
     Chunk,
@@ -24,6 +25,7 @@ from rag_service.services.documents import (
     find_version,
     lock_knowledge_base,
 )
+from rag_service.services.indexing import index_chunks, reserve_index
 from rag_service.services.parsing import parse
 from rag_service.storage import FileStorage
 
@@ -68,6 +70,7 @@ def reserve_generation(  # noqa: PLR0913
             )
         )
         generation = ProcessingGeneration(
+            index_generation_id=reserve_index(session, knowledge_base_id).id,
             version_id=version_id,
             operation_key=operation_key,
             number=(last or 0) + 1,
@@ -138,7 +141,11 @@ def retry_generation(  # noqa: PLR0913, PLR0917
 
 
 def process_generation(  # noqa: PLR0915 -- two crash-safe transaction stages
-    session: Session, storage: FileStorage, generation_id: UUID
+    session: Session,
+    storage: FileStorage,
+    generation_id: UUID,
+    settings: Settings | None = None,
+    embedding: BaseEmbedding | None = None,
 ) -> None:
     """Dagster-only work; crash-safe parse checkpoint and atomic chunk publication.
 
@@ -158,6 +165,8 @@ def process_generation(  # noqa: PLR0915 -- two crash-safe transaction stages
         if generation.status == "ready":
             session.commit()
             return
+        if generation.index_generation_id is None:
+            generation.index_generation_id = reserve_index(session, kb_id).id
         generation.status = "processing"
         if source.status != "ready":
             source.status = "processing"
@@ -187,22 +196,24 @@ def process_generation(  # noqa: PLR0915 -- two crash-safe transaction stages
             chunk_overlap=generation.chunk_overlap,
             tokenizer=lambda text: text.split(),
         )
-        ordinal = 0
+        chunks: list[Chunk] = []
         for part in parsed.segments:
             provenance = dict(cast(dict[str, object], part["provenance"]))
             header = str(provenance.get("table_header", ""))
             for value in splitter.split_text(str(part["text"])):
-                session.add(
-                    Chunk(
-                        generation_id=generation.id,
-                        ordinal=ordinal,
-                        text=f"{header}\n{value}" if header else value,
-                        provenance=provenance,
-                    )
+                chunk = Chunk(
+                    generation_id=generation.id,
+                    ordinal=len(chunks),
+                    text=f"{header}\n{value}" if header else value,
+                    provenance=provenance,
                 )
-                ordinal += 1
-        if not ordinal:
+                session.add(chunk)
+                chunks.append(chunk)
+        if not chunks:
             raise ValueError("No extractable content")
+        index_chunks(
+            session, generation, chunks, settings or load_settings(), embedding
+        )
         generation.status = "ready"
         generation.error_code = None
         generation.completed_at = datetime.now(UTC)

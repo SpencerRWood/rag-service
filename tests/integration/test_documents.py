@@ -21,7 +21,11 @@ from sqlalchemy.orm import Session
 from rag_service.api.routes.documents import original_storage
 from rag_service.config import Settings
 from rag_service.main import create_app
-from rag_service.models.persistence import Document, DocumentVersion
+from rag_service.models.persistence import (
+    Document,
+    DocumentVersion,
+    ProcessingGeneration,
+)
 from rag_service.services.documents import (
     DocumentConflictError,
     DocumentNotFoundError,
@@ -30,6 +34,7 @@ from rag_service.services.documents import (
     transition_version,
     upload_original,
 )
+from rag_service.services.processing import process_generation
 from rag_service.storage import FileStorage, build_storage
 
 
@@ -52,6 +57,13 @@ class Harness:
                 UUID(version),
                 target,
             )
+            if target == "ready":
+                generation = session.scalars(
+                    select(ProcessingGeneration).where(
+                        ProcessingGeneration.version_id == UUID(version)
+                    )
+                ).one()
+                process_generation(session, self.storage, generation.id, self.settings)
 
 
 @pytest.fixture(params=["filesystem", "s3"])
