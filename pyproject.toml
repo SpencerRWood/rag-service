@@ -37,6 +37,7 @@ dependencies = [
   "openpyxl>=3.1.5",
   "llama-index-core>=0.14.25",
   "httpx>=0.28.1",
+  "mcp>=1.26,<2",
 ]
 
 [dependency-groups]

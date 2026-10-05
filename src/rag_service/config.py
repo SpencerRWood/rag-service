@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     dagster_location: str = "rag-service"
     source_revision: str = "unknown"
     release_revision: str = "unknown"
+    mcp_path: str = "/mcp"
+    mcp_allowed_hosts: list[str] = ["localhost:*", "127.0.0.1:*", "[::1]:*"]
+    mcp_allowed_origins: list[str] = [
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "http://[::1]:*",
+    ]
 
     @model_validator(mode="after")
     def validate_configuration(self) -> Self:
@@ -41,6 +48,15 @@ class Settings(BaseSettings):
             raise ValueError("chunk_overlap must be smaller than chunk_size")
         if self.storage_backend == "s3" and not self.s3_bucket:
             raise ValueError("s3_bucket is required for S3 storage")
+        if (
+            not self.mcp_path.startswith("/")
+            or self.mcp_path == "/"
+            or self.mcp_path.endswith("/")
+            or any(character in self.mcp_path for character in "{}?#")
+        ):
+            raise ValueError(
+                "mcp_path must be an absolute non-root route without suffix"
+            )
         return self
 
 

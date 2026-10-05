@@ -59,16 +59,21 @@ class DocumentMetadata(BaseModel):
     connector_metadata: dict[str, object]
 
 
-class RetrievalResult(BaseModel):
-    """Source-backed context; cosine similarity is in [-1, 1], larger is better."""
+class SourceEvidence(BaseModel):
+    """Stable chunk identity and source context shared by search and fetch."""
 
     chunk_id: UUID
     document_id: UUID
     version_id: UUID
     text: str
-    score: float
     source: SourceProvenance
     metadata: DocumentMetadata
+
+
+class RetrievalResult(SourceEvidence):
+    """Ranked evidence; cosine similarity is in [-1, 1], larger is better."""
+
+    score: float
 
 
 class RetrievalResponse(BaseModel):

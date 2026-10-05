@@ -2,7 +2,7 @@
 
 Source-backed retrieval API for knowledge-base documents. The service will store
 original source files, process durable document versions asynchronously, index
-provenance-rich chunks, and expose retrieval over HTTP.
+provenance-rich chunks, and expose retrieval over HTTP and read-only MCP.
 
 ## Initial architecture
 
@@ -15,7 +15,7 @@ provenance-rich chunks, and expose retrieval over HTTP.
 The service implements knowledge-base configuration, durable document/source
 version history, portable original-file storage, asynchronous parsing/chunking
 and embedding, pgvector retrieval over HTTP, and an importable Dagster code
-location. MCP and operational diagnostics remain later backlog work.
+location and a read-only MCP adapter. Operational diagnostics remain later backlog work.
 
 The repository follows `SpencerRWood/template-fastapi-service`. Its Dagster
 `Definitions`, asset, asset job, typed resource, and secret-free runtime smoke
@@ -276,7 +276,7 @@ ties. An empty index or no matching indexed chunks returns HTTP 200 with an empt
 return HTTP 404. Unavailable embedding or persistence dependencies return safe
 HTTP 503 errors. SQLite provides only a deterministic development/test adapter;
 deployed similarity search runs in PostgreSQL/pgvector. No approximate index,
-hybrid search, reranking, answer generation, MCP, or connectors are added here.
+hybrid search, reranking, answer generation, or connectors are added here.
 LlamaIndex orchestrates embedding and retrieval through the reusable service layer;
 HTTP clients depend on this contract and `/openapi.json`, not the database schema.
 
@@ -284,6 +284,47 @@ Apply Alembic revision `0004` before running this release. PostgreSQL must have
 pgvector installed and the migration role must be able to create its `vector`
 extension in `public` (or an administrator can provision it first). Custom database
 search paths must include `public`. Schema downgrade remains refused.
+
+## Read-only MCP retrieval
+
+The API hosts a stateless Streamable HTTP MCP endpoint at `/mcp`, using the
+[official MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk).
+Clients initialize an MCP session, list tools, then call:
+
+```json
+{
+  "name": "search",
+  "arguments": {
+    "knowledge_base_id": "00000000-0000-0000-0000-000000000010",
+    "request": {"query": "How is source content versioned?", "result_count": 5}
+  }
+}
+```
+
+`request` is the HTTP `RetrievalRequest`, including the same metadata filters,
+limits, and optional historical `version_id`. Structured output is exactly the
+HTTP `RetrievalResponse`; the SDK also emits JSON text for clients reading text
+content. Call `fetch` with `knowledge_base_id` and a search result's `chunk_id`
+to read that exact indexed chunk, source locator, checksum, and current metadata.
+HTTP exposes the same fetch contract at
+`GET /knowledge-bases/{knowledge_base_id}/chunks/{chunk_id}`. Fetch omits the
+query-dependent similarity score and never calls an embedding provider. Retained
+completed chunks remain readable after newer versions or reprocessing; unindexed,
+pending, failed, deleted, or cross-base evidence cannot be fetched.
+
+Only `search` and `fetch` are registered, both annotated read-only, non-destructive,
+and idempotent. No resources, prompts, write tools, or generative inference are
+exposed. Search uses the existing embedding runtime; no generative-model
+credential or particular consumer account entitlement is required. Invalid calls
+produce MCP tool errors, and dependency errors expose safe messages.
+
+Set `RAG_MCP_PATH` to change the absolute endpoint path. Set
+`RAG_MCP_ALLOWED_HOSTS` and `RAG_MCP_ALLOWED_ORIGINS` as JSON arrays for the
+infrastructure-owned hostname and permitted browser origins. Defaults allow
+loopback hosts/origins with ports; DNS rebinding protection remains enabled.
+Infrastructure owns network exposure, TLS, and access controls; authentication
+and authorization are outside #424. The endpoint shares the API's configured
+database and lifecycle, and startup does not migrate or contact model providers.
 
 ## Dagster code location
 

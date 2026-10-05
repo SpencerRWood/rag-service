@@ -26,6 +26,12 @@ def test_runtime_overrides_and_secret_redaction(
     assert "OPENPROJECT" not in repr(settings)
 
 
+@pytest.mark.parametrize("path", ["mcp", "/", "/mcp/", "/{path}", "/mcp?x=1"])
+def test_invalid_mcp_path_is_rejected(path: str) -> None:
+    with pytest.raises(ValidationError, match="mcp_path"):
+        Settings(mcp_path=path)
+
+
 def test_invalid_configuration_is_rejected() -> None:
     with pytest.raises(ValidationError, match="chunk_overlap"):
         Settings(chunk_size=32)
