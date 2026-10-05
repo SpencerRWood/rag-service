@@ -13,9 +13,9 @@ provenance-rich chunks, and expose retrieval over HTTP.
 - Local Qwen3 embeddings by default, with optional OpenRouter overrides
 
 The service implements knowledge-base configuration, durable document/source
-version history, portable original-file storage, asynchronous parsing/chunking,
-and an importable Dagster code location. The OpenProject R1 backlog adds retrieval, MCP, and
-operational diagnostics in subsequent stories.
+version history, portable original-file storage, asynchronous parsing/chunking
+and embedding, pgvector retrieval over HTTP, and an importable Dagster code
+location. MCP and operational diagnostics remain later backlog work.
 
 The repository follows `SpencerRWood/template-fastapi-service`. Its Dagster
 `Definitions`, asset, asset job, typed resource, and secret-free runtime smoke
@@ -91,10 +91,13 @@ checksum, source filename, byte size, and lifecycle state. Lists support bounded
 Uploads store originals and enter `pending`; they are not declared successfully
 processed by HTTP callers. The internal `transition_version` boundary supports
 `pending → processing → ready/failed` and explicit `failed → processing` retries.
-The active source is the highest numbered successfully ready version. Failed,
-pending, or late-finishing older versions cannot displace a newer ready source.
-Dagster jobs now own parsing and chunking. Processing `ready` means those derived
-artifacts are complete; embedding/index readiness belongs to the retrieval Story.
+The active source is the highest numbered successfully indexed version. Failed,
+pending, or late-finishing older versions cannot displace a newer indexed source.
+Dagster jobs own parsing, chunking, and embedding. New processing generations
+become `ready` only when their chunks and vectors are complete. Legacy #422
+parsed-only generations retain their history and status but have a null
+`index_generation_id`; they are excluded from active/retrieval selection until
+explicitly reprocessed through the existing endpoint. No automatic backfill runs.
 
 ### Asynchronous processing
 
@@ -140,7 +143,7 @@ available. Empty/scanned PDFs without extractable text fail safely; OCR is outsi
 this Story. Originals with unsupported binary/text encodings remain downloadable.
 
 Processing uses the existing knowledge-base mutation lock for each stage. Parsing
-commits a reusable checkpoint; chunk publication and ready state commit atomically.
+commits a reusable checkpoint; chunks, embeddings, and ready state commit atomically.
 Interrupted uncommitted work rolls back. Duplicate runs and automatic Dagster step
 retries reuse the same generation, and completed work is a no-op. Failed source
 versions or reprocessing never clear previous ready source/generation state.
@@ -167,6 +170,121 @@ garbage collection is outside this story. `RAG_MAX_UPLOAD_BYTES` bounds the byte
 read into application memory (default 25 MiB); oversized originals return HTTP 413.
 Infrastructure should also cap request sizes before multipart parsing/spooling.
 
+## Embedding provider contract
+
+The default provider calls a separately deployed Qwen3-Embedding-0.6B endpoint
+using 1024-dimensional vectors. Neither the API nor the code location loads model
+weights or starts an embedding server. Infrastructure chooses the runtime, host,
+accelerator, and network placement. Configure `RAG_EMBEDDING_ENDPOINT` as an
+OpenAI-compatible API base URL, including `/v1` (default
+`http://localhost:8080/v1`). Both document batches and queries use
+`POST {base}/embeddings` with `model`, `input`, `dimensions`, and float encoding.
+For a vLLM Qwen endpoint, serve `Qwen/Qwen3-Embedding-0.6B` in pooling mode and
+set its served model name to `Qwen3-Embedding-0.6B` to match the configured alias.
+The local adapter leaves document text unchanged and formats queries with the
+[Qwen retrieval instruction](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B).
+
+Select OpenRouter by configuring `RAG_EMBEDDING_PROVIDER=openrouter`, a supported
+embedding model/dimension, `RAG_EMBEDDING_ENDPOINT=https://openrouter.ai/api/v1`,
+and the runtime `RAG_EMBEDDING_API_KEY`. Its adapter uses the same provider
+interface and sends `search_document` or `search_query` input types through
+the [OpenRouter embeddings API](https://openrouter.ai/docs/api/api-reference/embeddings/submit-an-embedding-request).
+There is no fallback to another provider or to generative inference. Credentials
+never enter generation records or Dagster run config. Provider errors expose safe
+application failures, and `/health` stays independent of provider availability.
+
+`RAG_EMBEDDING_TIMEOUT` bounds each provider request (default 30 seconds), and
+`RAG_EMBEDDING_BATCH_SIZE` bounds batches (default 32, maximum 256). Responses
+must match the configured model, contain exactly one vector for each input, and
+use finite, nonzero vectors of the configured dimension. Response indices restore
+input order before storage. Provider request failures, malformed responses, and
+interrupted batches roll back all derived artifacts for that processing stage.
+
+The first processing reservation pins one index generation for the knowledge
+base. Each processing generation references that embedding space; each indexed
+chunk records provider, model, dimensions, index generation, processing generation,
+and creation time. Database foreign keys prevent mixed identities, and PostgreSQL
+checks vector dimensions. Existing generations and queries use the pinned identity
+even if service defaults change. Changing a knowledge base's provider/model/dimension
+requires a replacement index and is rejected with HTTP 409; automatic replacement
+build/promotion is outside #423. Original versions and previously ready generations
+remain available. The embedding endpoint is snapshotted with the generation.
+
+## HTTP retrieval
+
+`POST /knowledge-bases/{knowledge_base_id}/retrieve` accepts:
+
+```json
+{
+  "query": "How is source content versioned?",
+  "result_count": 5,
+  "filters": [
+    {"field": "source", "operator": "eq", "value": "manual"},
+    {"field": "tag", "operator": "in", "value": ["reference", "architecture"]}
+  ]
+}
+```
+
+The query is nonempty and at most 8192 characters; `result_count` defaults to 5
+and accepts 1–100. Optional `version_id` selects one source version within this
+knowledge base. Normal queries select the highest numbered indexed source of each
+non-deleted document, then its highest numbered completed indexed processing
+generation. Pending or failed work never displaces ready retrieval state, and
+late completion of an older source/generation cannot displace a newer one.
+
+Filters support `title`, `source`, and `tag`, with case-sensitive `eq` or `in`.
+`tag` tests individual tag membership; `in` accepts any value in its nonempty
+list. Multiple filters combine with AND before ranking and result limiting.
+At most 20 filters and 100 values per IN filter are accepted. Filtering uses current
+document metadata, including for historical versions. Arbitrary connector JSON
+predicates and other operators are deferred. Unsupported fields/operators and
+invalid request shapes return HTTP 422.
+
+```json
+{
+  "knowledge_base_id": "00000000-0000-0000-0000-000000000010",
+  "results": [
+    {
+      "chunk_id": "00000000-0000-0000-0000-000000000011",
+      "document_id": "00000000-0000-0000-0000-000000000012",
+      "version_id": "00000000-0000-0000-0000-000000000013",
+      "text": "Source versions preserve the exact original bytes.",
+      "score": 0.91,
+      "source": {
+        "filename": "guide.md",
+        "media_type": "text/markdown",
+        "checksum": "<source SHA-256>",
+        "location": {"section": "Versioning", "line_start": 4, "line_end": 8}
+      },
+      "metadata": {
+        "title": "Guide",
+        "tags": ["reference"],
+        "source": "manual",
+        "connector_metadata": {}
+      }
+    }
+  ]
+}
+```
+
+All shown response fields are stable and required; metadata `source` may be null,
+and `location` contains the available parser provenance (page, section, sheet,
+row/column context, or source path/line range). PostgreSQL uses exact pgvector
+cosine search: scores range from -1 to 1, higher is better, with chunk ID breaking
+ties. An empty index or no matching indexed chunks returns HTTP 200 with an empty
+`results` array. Unknown knowledge bases, cross-base versions, and deleted versions
+return HTTP 404. Unavailable embedding or persistence dependencies return safe
+HTTP 503 errors. SQLite provides only a deterministic development/test adapter;
+deployed similarity search runs in PostgreSQL/pgvector. No approximate index,
+hybrid search, reranking, answer generation, MCP, or connectors are added here.
+LlamaIndex orchestrates embedding and retrieval through the reusable service layer;
+HTTP clients depend on this contract and `/openapi.json`, not the database schema.
+
+Apply Alembic revision `0004` before running this release. PostgreSQL must have
+pgvector installed and the migration role must be able to create its `vector`
+extension in `public` (or an administrator can provision it first). Custom database
+search paths must include `public`. Schema downgrade remains refused.
+
 ## Dagster code location
 
 The same application image supports both roles. Its default command starts
@@ -181,7 +299,7 @@ uv run dagster api grpc -m rag_service.dagster.definitions -h 0.0.0.0 -p 4000
 `configuration_job` proves asset/resource configuration without processing
 documents. `runtime_smoke_job` uses the template's in-process executor and
 memory IO manager. Inside the centralized candidate-image gate it exercises
-parsing, provenance, transactions, and completed-operation replay in a disposable
+parsing, provenance, vector persistence, transactions, and completed-operation replay in a disposable
 schema using the gate's PostgreSQL credentials. Local smoke tests use temporary
 SQLite. It never reads the real RAG database/originals or calls model providers.
 

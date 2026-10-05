@@ -23,8 +23,10 @@ class Settings(BaseSettings):
     embedding_provider: Literal["local", "openrouter"] = "local"
     embedding_model: str = Field(default="Qwen3-Embedding-0.6B", min_length=1)
     embedding_dimensions: int = Field(default=1024, gt=0)
-    embedding_endpoint: str = "http://localhost:8080"
+    embedding_endpoint: str = "http://localhost:8080/v1"
     embedding_api_key: SecretStr = SecretStr("")
+    embedding_timeout: float = Field(default=30, gt=0)
+    embedding_batch_size: int = Field(default=32, ge=1, le=256)
     chunk_size: int = Field(default=512, gt=0)
     chunk_overlap: int = Field(default=64, ge=0)
     dagster_url: str = "http://localhost:3000"

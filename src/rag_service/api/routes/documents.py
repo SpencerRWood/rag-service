@@ -149,16 +149,21 @@ StorageDependency = Annotated[FileStorage, Depends(original_storage)]
 
 
 def document_read(session: Session, document: Document) -> DocumentRead:
-    """Compute the active source deterministically from ready history."""
+    """Active means indexed; legacy parsed-only history is retained but inactive."""
     versions = select(DocumentVersion).where(DocumentVersion.document_id == document.id)
     latest = session.scalars(
         versions.order_by(DocumentVersion.number.desc()).limit(1)
     ).one()
     active = session.scalar(
         select(DocumentVersion.id)
+        .join(
+            ProcessingGeneration, ProcessingGeneration.version_id == DocumentVersion.id
+        )
         .where(
             DocumentVersion.document_id == document.id,
             DocumentVersion.status == "ready",
+            ProcessingGeneration.status == "ready",
+            ProcessingGeneration.index_generation_id.is_not(None),
         )
         .order_by(DocumentVersion.number.desc())
         .limit(1)
@@ -180,6 +185,7 @@ def document_read(session: Session, document: Document) -> DocumentRead:
             .where(
                 ProcessingGeneration.version_id == active,
                 ProcessingGeneration.status == "ready",
+                ProcessingGeneration.index_generation_id.is_not(None),
             )
             .order_by(ProcessingGeneration.number.desc())
             .limit(1)

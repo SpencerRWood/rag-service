@@ -40,10 +40,11 @@ class ReprocessRequest(BaseModel):
 
 
 class GenerationRead(BaseModel):
-    """Processing readiness is distinct from future embedding/index readiness."""
+    """New ready generations include indexed chunks; legacy identity is nullable."""
 
     model_config = ConfigDict(from_attributes=True)
     id: UUID
+    index_generation_id: UUID | None
     version_id: UUID
     number: int
     status: str

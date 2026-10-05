@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     CheckConstraint,
@@ -146,6 +147,7 @@ class ProcessingGeneration(Base):
 
     __tablename__ = "processing_generations"
     __table_args__ = (
+        UniqueConstraint("id", "index_generation_id", name="uq_processing_index"),
         UniqueConstraint("version_id", "operation_key", name="uq_processing_operation"),
         UniqueConstraint("version_id", "number", name="uq_processing_number"),
         CheckConstraint("number > 0", name="ck_processing_number"),
@@ -161,6 +163,9 @@ class ProcessingGeneration(Base):
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    index_generation_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("index_generations.id")
+    )
     version_id: Mapped[UUID] = mapped_column(ForeignKey("document_versions.id"))
     operation_key: Mapped[str] = mapped_column(String(255))
     number: Mapped[int]
@@ -207,3 +212,65 @@ class Chunk(Base):
     ordinal: Mapped[int]
     text: Mapped[str] = mapped_column(Text)
     provenance: Mapped[dict[str, object]] = mapped_column(JSON)
+
+
+class IndexGeneration(Base):
+    """One immutable embedding space per knowledge base; replacement is deferred."""
+
+    __tablename__ = "index_generations"
+    __table_args__ = (
+        UniqueConstraint("knowledge_base_id", name="uq_index_knowledge_base"),
+        UniqueConstraint(
+            "id", "provider", "model", "dimensions", name="uq_index_identity"
+        ),
+        CheckConstraint("dimensions > 0", name="ck_index_dimensions"),
+        CheckConstraint(
+            "provider IN ('local', 'openrouter')", name="ck_index_provider"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    knowledge_base_id: Mapped[UUID] = mapped_column(ForeignKey("knowledge_bases.id"))
+    provider: Mapped[str] = mapped_column(String(32))
+    model: Mapped[str] = mapped_column(String(255))
+    dimensions: Mapped[int]
+    endpoint: Mapped[str] = mapped_column(String(2048))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+class IndexedChunk(Base):
+    """Persist vectors separately, constrained to their generation's identity."""
+
+    __tablename__ = "indexed_chunks"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["index_generation_id", "provider", "model", "dimensions"],
+            [
+                "index_generations.id",
+                "index_generations.provider",
+                "index_generations.model",
+                "index_generations.dimensions",
+            ],
+            name="fk_indexed_identity",
+        ),
+        ForeignKeyConstraint(
+            ["processing_generation_id", "index_generation_id"],
+            ["processing_generations.id", "processing_generations.index_generation_id"],
+            name="fk_indexed_processing",
+        ),
+    )
+
+    chunk_id: Mapped[UUID] = mapped_column(ForeignKey("chunks.id"), primary_key=True)
+    processing_generation_id: Mapped[UUID]
+    index_generation_id: Mapped[UUID]
+    provider: Mapped[str] = mapped_column(String(32))
+    model: Mapped[str] = mapped_column(String(255))
+    dimensions: Mapped[int]
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector().with_variant(JSON(), "sqlite")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )

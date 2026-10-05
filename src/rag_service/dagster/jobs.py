@@ -49,7 +49,9 @@ def process_document(config: ProcessingConfig, rag: RAGResource) -> None:
     factory = create_session_factory(rag.settings())
     try:
         with factory() as session:
-            process_generation(session, rag.storage(), UUID(config.generation_id))
+            process_generation(
+                session, rag.storage(), UUID(config.generation_id), rag.settings()
+            )
     except ProcessingFailedError:
         raise Failure("Document processing failed; inspect generation status") from None
     finally:
