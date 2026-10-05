@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-10-05)
+
+### Features
+
+- Index and retrieve knowledge-base content (OP-423)
+  ([#4](https://github.com/SpencerRWood/rag-service/pull/4),
+  [`f610e94`](https://github.com/SpencerRWood/rag-service/commit/f610e945dccf70df5ecea359c028193dbd661139))
+
+
 ## v0.3.0 (2026-10-04)
 
 ### Features
