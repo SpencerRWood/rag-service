@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-10-05)
+
+### Features
+
+- Expose read-only MCP retrieval ([#5](https://github.com/SpencerRWood/rag-service/pull/5),
+  [`dc40582`](https://github.com/SpencerRWood/rag-service/commit/dc405827813bb15069a9377cc1ed31f04c142453))
+
+
 ## v0.4.0 (2026-10-05)
 
 ### Features
