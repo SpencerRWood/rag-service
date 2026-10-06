@@ -20,6 +20,11 @@ if [[ -n ${RAG_EMBEDDING_VERIFY_CACHE_PATH:-} ]]; then
 fi
 docker run -d --platform linux/amd64 --name "$name" --tmpfs /tmp:rw,size=256m \
   -v "$cache_mount:/data/models" \
+  -e RAG_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B \
+  -e RAG_EMBEDDING_DIMENSIONS=1024 \
+  -e RAG_EMBEDDING_CACHE_PATH=/data/models \
+  -e RAG_EMBEDDING_TIMEOUT=25 -e RAG_EMBEDDING_BATCH_SIZE=32 \
+  -e RAG_EMBEDDING_THREADS=4 \
   -e "RAG_SOURCE_REVISION=$revision" -e "RAG_RELEASE_REVISION=$release" \
   "$image" > "$root/embedding-evidence/container-id.txt"
 for ((attempt=1; attempt<=130; attempt++)); do

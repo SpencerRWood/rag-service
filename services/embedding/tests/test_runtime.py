@@ -65,6 +65,8 @@ def test_invalid_configuration(settings: dict[str, object]) -> None:
 
 
 def test_environment_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RAG_EMBEDDING_MODEL", MODEL)
+    monkeypatch.setenv("RAG_EMBEDDING_DIMENSIONS", "1024")
     monkeypatch.setenv("RAG_EMBEDDING_TIMEOUT", "12")
     monkeypatch.setenv("RAG_EMBEDDING_BATCH_SIZE", "8")
     config = Settings()
@@ -72,6 +74,15 @@ def test_environment_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.embedding_dimensions == 1024
     assert config.embedding_timeout == 12
     assert config.embedding_batch_size == 8
+
+
+@pytest.mark.parametrize("dimensions", ["512", "not-a-number"])
+def test_invalid_environment_dimensions(
+    dimensions: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("RAG_EMBEDDING_DIMENSIONS", dimensions)
+    with pytest.raises(ValidationError):
+        Settings()
 
 
 @pytest.mark.parametrize(
