@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rag-service"
-version = "0.5.0"
+version = "0.6.0"
 description = "Source-backed document ingestion and retrieval API."
 readme = "README.md"
 requires-python = ">=3.14"

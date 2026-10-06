@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.6.0 (2026-10-06)
+
+### Features
+
+- Add runtime diagnostics and dev verification
+  ([#6](https://github.com/SpencerRWood/rag-service/pull/6),
+  [`2617d68`](https://github.com/SpencerRWood/rag-service/commit/2617d689c6452ec20433d3918228dd2d6be5c37e))
+
+
 ## v0.5.0 (2026-10-05)
 
 ### Features
