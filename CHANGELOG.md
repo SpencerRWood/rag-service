@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.7.1 (2026-10-06)
+
+### Bug Fixes
+
+- Parse deployed embedding dimension configuration (OP-524)
+  ([#8](https://github.com/SpencerRWood/rag-service/pull/8),
+  [`6145e3f`](https://github.com/SpencerRWood/rag-service/commit/6145e3f8b7f483fb8659571bbd0aa44d38a1c6c1))
+
+
 ## v0.7.0 (2026-10-06)
 
 ### Features
