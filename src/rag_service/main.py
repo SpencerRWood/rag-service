@@ -11,6 +11,7 @@ from rag_service.api.router import api_router
 from rag_service.config import Settings, load_settings
 from rag_service.database import create_session_factory
 from rag_service.mcp import create_mcp
+from rag_service.telemetry import metrics_registry
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -40,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.session_factory = session_factory
     app.state.mcp = mcp
+    app.state.metrics_registry = metrics_registry(session_factory)
     app.include_router(api_router)
     app.mount("/", mcp_app)
     return app

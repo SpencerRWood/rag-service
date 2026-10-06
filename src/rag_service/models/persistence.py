@@ -8,6 +8,7 @@ from sqlalchemy import (
     JSON,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     ForeignKeyConstraint,
     String,
@@ -197,6 +198,25 @@ class ProcessingAttempt(Base):
     request_key: Mapped[str] = mapped_column(String(255))
     submitted: Mapped[bool] = mapped_column(default=False)
     dagster_run_id: Mapped[str | None] = mapped_column(String(255))
+
+
+class ProcessingObservation(Base):
+    """Content-free worker measurements survive independent API/worker restarts."""
+
+    __tablename__ = "processing_observations"
+    __table_args__ = (
+        CheckConstraint(
+            "outcome IN ('success', 'failure')", name="ck_observation_outcome"
+        ),
+        CheckConstraint("duration_seconds >= 0", name="ck_observation_duration"),
+        CheckConstraint("chunk_count >= 0", name="ck_observation_chunks"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    outcome: Mapped[str] = mapped_column(String(16))
+    duration_seconds: Mapped[float | None] = mapped_column(Float)
+    embedding_duration_seconds: Mapped[float | None] = mapped_column(Float)
+    chunk_count: Mapped[int]
 
 
 class Chunk(Base):

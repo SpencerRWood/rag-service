@@ -19,6 +19,7 @@ from rag_service.models.persistence import (
     DocumentVersion,
     ProcessingAttempt,
     ProcessingGeneration,
+    ProcessingObservation,
 )
 from rag_service.services.documents import (
     DocumentConflictError,
@@ -145,4 +146,12 @@ def mark_interrupted(
         generation.error_code = "dagster_run_failed"
         if source.status != "ready":
             source.status = "failed"
+        session.add(
+            ProcessingObservation(
+                outcome="failure",
+                duration_seconds=None,
+                embedding_duration_seconds=None,
+                chunk_count=0,
+            )
+        )
     session.commit()

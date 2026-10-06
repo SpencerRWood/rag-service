@@ -38,6 +38,7 @@ dependencies = [
   "llama-index-core>=0.14.25",
   "httpx>=0.28.1",
   "mcp>=1.26,<2",
+  "prometheus-client>=0.22,<1",
 ]
 
 [dependency-groups]
@@ -67,6 +68,16 @@ initiative_id = 418
 
 [tool.wood.workflow]
 output_directory = "/private/tmp"
+
+[tool.wood.verify]
+version = 1
+retry_safe = true
+
+[[tool.wood.verify.checks]]
+name = "dev-ingestion-retrieval-mcp"
+argv = ["uv", "run", "python", "-m", "rag_service.verification"]
+timeout_seconds = 60
+required = true
 
 [tool.dagster]
 module_name = "rag_service.dagster.definitions"

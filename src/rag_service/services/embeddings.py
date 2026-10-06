@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SecretStr
 
 from rag_service.config import Settings
 from rag_service.models.persistence import IndexGeneration
+from rag_service.telemetry import QUERY_EMBEDDING
 
 
 class EmbeddingUnavailableError(Exception):
@@ -89,7 +90,8 @@ class EndpointEmbedding(BaseEmbedding):
         return vectors
 
     def _get_query_embedding(self, query: str) -> list[float]:
-        return self._request([query], query=True)[0]
+        with QUERY_EMBEDDING.time():
+            return self._request([query], query=True)[0]
 
     async def _aget_query_embedding(self, query: str) -> list[float]:
         return await asyncio.to_thread(self._get_query_embedding, query)

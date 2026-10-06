@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from rag_service.api.routes.diagnostics import router as diagnostics_router
 from rag_service.api.routes.documents import router as document_router
 from rag_service.api.routes.health import router as health_router
 from rag_service.api.routes.knowledge_bases import router as knowledge_base_router
@@ -16,3 +17,4 @@ api_router.include_router(document_router)
 api_router.include_router(processing_router)
 api_router.include_router(metadata_router)
 api_router.include_router(retrieval_router)
+api_router.include_router(diagnostics_router)
