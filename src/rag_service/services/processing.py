@@ -1,6 +1,7 @@
 """Durable processing reservations and transactional publication for Dagster."""
 
 from datetime import UTC, datetime
+from time import perf_counter
 from typing import cast
 from uuid import UUID
 
@@ -18,6 +19,7 @@ from rag_service.models.persistence import (
     ParsedContent,
     ProcessingAttempt,
     ProcessingGeneration,
+    ProcessingObservation,
 )
 from rag_service.services.documents import (
     DocumentConflictError,
@@ -158,6 +160,8 @@ def process_generation(  # noqa: PLR0915 -- two crash-safe transaction stages
     source = session.get_one(DocumentVersion, generation.version_id)
     kb_id, doc_id = source.knowledge_base_id, source.document_id
     session.rollback()
+    started = perf_counter()
+    embedding_duration: float | None = None
     try:
         lock_knowledge_base(session, kb_id)
         find_document(session, kb_id, doc_id)
@@ -211,13 +215,25 @@ def process_generation(  # noqa: PLR0915 -- two crash-safe transaction stages
                 chunks.append(chunk)
         if not chunks:
             raise ValueError("No extractable content")
-        index_chunks(
-            session, generation, chunks, settings or load_settings(), embedding
-        )
+        embedding_started = perf_counter()
+        try:
+            index_chunks(
+                session, generation, chunks, settings or load_settings(), embedding
+            )
+        finally:
+            embedding_duration = perf_counter() - embedding_started
         generation.status = "ready"
         generation.error_code = None
         generation.completed_at = datetime.now(UTC)
         source.status = "ready"
+        session.add(
+            ProcessingObservation(
+                outcome="success",
+                duration_seconds=perf_counter() - started,
+                embedding_duration_seconds=embedding_duration,
+                chunk_count=len(chunks),
+            )
+        )
         session.commit()
     except Exception:
         session.rollback()
@@ -229,6 +245,14 @@ def process_generation(  # noqa: PLR0915 -- two crash-safe transaction stages
             generation.error_code = "processing_failed"
             if source.status != "ready":
                 source.status = "failed"
+            session.add(
+                ProcessingObservation(
+                    outcome="failure",
+                    duration_seconds=perf_counter() - started,
+                    embedding_duration_seconds=embedding_duration,
+                    chunk_count=0,
+                )
+            )
         session.commit()
         raise ProcessingFailedError from None
 

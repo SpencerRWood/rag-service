@@ -29,6 +29,7 @@ from rag_service.models.retrieval import (
 )
 from rag_service.services.documents import DocumentNotFoundError, require_knowledge_base
 from rag_service.services.embeddings import build_embedding
+from rag_service.telemetry import measure_retrieval
 
 
 def source_evidence(
@@ -227,6 +228,7 @@ class PgVectorRetriever(BaseRetriever):
         return nodes
 
 
+@measure_retrieval
 def retrieve(
     session: Session,
     knowledge_base_id: UUID,

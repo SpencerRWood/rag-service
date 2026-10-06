@@ -15,6 +15,7 @@ from rag_service.models.persistence import (
     KnowledgeBase,
 )
 from rag_service.storage import FileStorage
+from rag_service.telemetry import measure_upload
 
 VersionStatus = Literal["pending", "processing", "ready", "failed"]
 
@@ -111,6 +112,7 @@ def source_versions(session: Session, document_id: UUID) -> list[DocumentVersion
     )
 
 
+@measure_upload
 def upload_original(  # noqa: PLR0913, PLR0917 -- explicit source/metadata boundary
     session: Session,
     storage: FileStorage,

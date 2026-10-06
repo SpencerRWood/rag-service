@@ -13,7 +13,13 @@ def create_session_factory(settings: Settings) -> sessionmaker[Session]:
     url = settings.database_url.get_secret_value()
     if not url:
         raise ValueError("RAG_DATABASE_URL is required for persistence")
-    engine = create_engine(url, pool_pre_ping=True, hide_parameters=True)
+    engine = create_engine(
+        url,
+        pool_pre_ping=True,
+        hide_parameters=True,
+        connect_args={"connect_timeout": 2} if url.startswith("postgresql") else {},
+        **({"pool_timeout": 2} if url.startswith("postgresql") else {}),
+    )
 
     @event.listens_for(engine, "connect")
     def enforce_sqlite_foreign_keys(connection: object, _record: object) -> None:

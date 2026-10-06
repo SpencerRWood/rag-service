@@ -371,3 +371,57 @@ The storage contract suite uses the same tests for filesystem and an isolated
 S3 emulator. Migration/API tests use SQLite by default; set
 `RAG_TEST_DATABASE_URL` to a disposable PostgreSQL database to exercise the
 same suite with isolated per-test schemas. Never point this at production.
+
+## Runtime diagnostics and dev verification
+
+`GET /health` is dependency-free liveness. `GET /ready` gates readiness on the
+migrated database and configured storage, and reports fixed `available`,
+`unavailable`, or `not_configured` states. Dagster checks the configured code
+location; embedding checks its model catalog without inference. Their outages
+remain observable while core readiness stays healthy. Probes run concurrently
+with bounded HTTP/database timeouts. Filesystem readiness creates and removes a
+temporary probe; S3 readiness checks bucket connectivity without writing objects.
+Neither response exposes endpoints, settings, credentials, or exception text.
+
+`GET /metrics` exports Prometheus upload outcomes, retrieval outcomes/latency,
+returned chunk counts, cosine scores, and query-embedding duration. Those API
+measurements reset when the single API process restarts. Completed Dagster
+executions persist content-free processing outcomes, durations, document-embedding
+batch durations, and published chunk counts in `processing_observations`; the API
+aggregates them in SQL, across worker and API restarts. Interrupted runs reconciled
+by the recovery sensor count as failures with unknown durations, excluded from
+duration summaries. Already-ready no-op processing does not add observations.
+Labels contain only fixed outcomes; queries, filenames, source text, identifiers,
+and provider credentials are never metric labels. A database/collector outage
+returns HTTP 503 rather than reporting zero successful work. Cosine scores can
+be negative; the Prometheus client omits their histogram sum.
+
+The existing `POST /knowledge-bases/{id}/retrieve` is the diagnostic retrieval
+endpoint: it returns actual chunks, scores, stable IDs, and provenance, and does
+not generate answers. Source content is returned only for an explicit retrieval
+or fetch request; operational diagnostics contain no document content.
+Infrastructure owns private ingress for `/mcp`, `/mcp/*`, `/metrics`, and `/ready`.
+Use its LAN-restricted `:8080` route; forwarding headers do not grant access.
+
+After approved delivery, run `wood repo verify --json` from this checkout on the
+private dev network. Set these non-secret selectors explicitly:
+
+| Variable | Required value |
+| --- | --- |
+| `RAG_VERIFY_URL` | Private RAG base URL, including `:8080` |
+| `RAG_VERIFY_DAGSTER_URL` | Private shared Dagster base URL |
+| `RAG_VERIFY_UNTRUSTED_MCP_URL` | Edge/proxy MCP URL outside the approved direct connection |
+| `RAG_VERIFY_VERSION` | Expected semantic package version |
+| `RAG_VERIFY_SOURCE_REVISION` | Expected released artifact's OCI source revision |
+| `RAG_VERIFY_RELEASE_REVISION` | Expected semantic release tag |
+
+The required 60-second verification checks identity, dependencies, a denied edge
+request with spoofed forwarding headers, metrics, API-launched successful Dagster
+processing, HTTP retrieval, and protocol-level MCP search/fetch parity and read-only
+tools. It uses unique test knowledge bases and a short synthetic document, then
+soft-deletes that document; metadata/history and the empty test knowledge base
+remain for evidence. Repeated runs preserve user documents. Its bounded JSON
+contains only check names, fixture/run IDs, and revision. Missing configuration
+or failures return a nonzero exit without printing remote bodies or credentials.
+The verifier proves application behavior; infrastructure separately verifies the
+running digest and artifact identity. Local fixtures do not attest to deployment.
