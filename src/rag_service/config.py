@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     s3_endpoint: str | None = None
     s3_region: str = "us-east-1"
     embedding_provider: Literal["local", "openrouter"] = "local"
-    embedding_model: str = Field(default="Qwen3-Embedding-0.6B", min_length=1)
+    embedding_model: str = Field(default="Qwen/Qwen3-Embedding-0.6B", min_length=1)
     embedding_dimensions: int = Field(default=1024, gt=0)
     embedding_endpoint: str = "http://localhost:8080/v1"
     embedding_api_key: SecretStr = SecretStr("")
