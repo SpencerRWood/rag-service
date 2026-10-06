@@ -29,3 +29,79 @@ jobs:
       version_image_digest: ${{ needs.release.outputs.version_image_digest }}
     secrets:
       infrastructure_token: ${{ secrets.INFRASTRUCTURE_PR_TOKEN }}
+
+  embedding:
+    needs: release
+    if: ${{ needs.release.outputs.released == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_digest: ${{ steps.identity.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release.outputs.release_tag }}
+      - uses: astral-sh/setup-uv@v7
+      - name: Validate independent embedding runtime
+        run: bash scripts/check-embedding.sh
+      - uses: docker/setup-buildx-action@v4.4.1
+      - name: Build embedding candidate
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: services/embedding/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: rag-embedding:candidate
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.release.outputs.release_tag }}
+      - name: Verify real Qwen candidate before publishing
+        env:
+          SOURCE_REVISION: ${{ github.sha }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+        run: bash scripts/verify-embedding-image.sh rag-embedding:candidate "$SOURCE_REVISION" "$RELEASE_TAG"
+      - uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Publish the verified candidate and retain identity
+        id: identity
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/spencerrwood/rag-embedding:$RELEASE_TAG"
+          docker tag rag-embedding:candidate "$image"
+          docker push "$image"
+          digest=$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')
+          echo "digest=${digest##*@}" >> "$GITHUB_OUTPUT"
+          mkdir -p embedding-evidence
+          docker image inspect "$image" > embedding-evidence/image.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: embedding-runtime-evidence
+          path: embedding-evidence/
+
+  embedding-promotion:
+    needs: [release, embedding]
+    if: ${{ needs.release.outputs.released == 'true' }}
+    uses: SpencerRWood/workflows/.github/workflows/promote-container-to-dev.yml@v2
+    permissions:
+      contents: read
+    with:
+      infrastructure_repository: SpencerRWood/infrastructure
+      image_name: rag-embedding
+      image_key: rag_embedding_image_ref
+      release_tag: ${{ needs.release.outputs.release_tag }}
+      image_repository: ghcr.io/spencerrwood/rag-embedding
+      version_image: ghcr.io/spencerrwood/rag-embedding:${{ needs.release.outputs.release_tag }}
+      image_digest: ${{ needs.embedding.outputs.image_digest }}
+      version_image_digest: ghcr.io/spencerrwood/rag-embedding:${{ needs.release.outputs.release_tag }}@${{ needs.embedding.outputs.image_digest }}
+    secrets:
+      infrastructure_token: ${{ secrets.INFRASTRUCTURE_PR_TOKEN }}

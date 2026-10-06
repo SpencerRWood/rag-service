@@ -179,8 +179,8 @@ accelerator, and network placement. Configure `RAG_EMBEDDING_ENDPOINT` as an
 OpenAI-compatible API base URL, including `/v1` (default
 `http://localhost:8080/v1`). Both document batches and queries use
 `POST {base}/embeddings` with `model`, `input`, `dimensions`, and float encoding.
-For a vLLM Qwen endpoint, serve `Qwen/Qwen3-Embedding-0.6B` in pooling mode and
-set its served model name to `Qwen3-Embedding-0.6B` to match the configured alias.
+Use the separate [Sentence Transformers runtime](services/embedding/README.md)
+with the canonical model identity `Qwen/Qwen3-Embedding-0.6B`.
 The local adapter leaves document text unchanged and formats queries with the
 [Qwen retrieval instruction](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B).
 
@@ -425,3 +425,11 @@ contains only check names, fixture/run IDs, and revision. Missing configuration
 or failures return a nonzero exit without printing remote bodies or credentials.
 The verifier proves application behavior; infrastructure separately verifies the
 running digest and artifact identity. Local fixtures do not attest to deployment.
+# Separate embedding runtime
+
+The [embedding service](services/embedding/README.md) lives in this repository
+and builds the independent `rag-embedding` image. It runs the pinned Qwen
+model through Sentence Transformers and exposes the OpenAI embeddings contract
+used by the existing endpoint provider. Infrastructure deploys and connects it
+to the API and Dagster code server using the internal `embedding-service`
+hostname; application inference stays outside both RAG processes.

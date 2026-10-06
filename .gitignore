@@ -60,3 +60,5 @@ artifacts/
 output/
 
 AGENTS.md
+# Local candidate image evidence is retained outside version control.
+embedding-evidence/

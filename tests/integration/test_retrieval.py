@@ -252,7 +252,7 @@ def test_atomic_visibility_replay_and_pinned_identity(
         index = session.scalars(select(IndexGeneration)).one()
         assert (indexed.provider, indexed.model, indexed.dimensions) == (
             "local",
-            "Qwen3-Embedding-0.6B",
+            "Qwen/Qwen3-Embedding-0.6B",
             1024,
         )
         assert indexed.created_at is not None
@@ -461,7 +461,7 @@ def test_provider_http_contract_document_and_query(
         json={
             "name": "Provider",
             "embedding_provider": provider,
-            "embedding_model": "Qwen3-Embedding-0.6B"
+            "embedding_model": "Qwen/Qwen3-Embedding-0.6B"
             if provider == "local"
             else "test/model",
             "embedding_dimensions": 2,

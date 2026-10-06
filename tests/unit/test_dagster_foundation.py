@@ -16,7 +16,7 @@ def test_definitions_and_smoke_run() -> None:
     assert configured.success
     assert configured.output_for_node("configuration_summary") == {
         "embedding_provider": "local",
-        "embedding_model": "Qwen3-Embedding-0.6B",
+        "embedding_model": "Qwen/Qwen3-Embedding-0.6B",
         "embedding_dimensions": 1024,
         "chunk_size": 512,
         "chunk_overlap": 64,
@@ -25,5 +25,5 @@ def test_definitions_and_smoke_run() -> None:
 
 def test_typed_resource_shares_runtime_storage() -> None:
     resource = RAGResource()
-    assert resource.settings().embedding_model == "Qwen3-Embedding-0.6B"
+    assert resource.settings().embedding_model == "Qwen/Qwen3-Embedding-0.6B"
     assert isinstance(resource.storage(), FilesystemStorage)

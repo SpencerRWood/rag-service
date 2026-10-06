@@ -31,7 +31,7 @@ def test_create_list_get_and_restart(
     assert response.status_code == 201
     record = response.json()
     assert record["embedding_provider"] == "local"
-    assert record["embedding_model"] == "Qwen3-Embedding-0.6B"
+    assert record["embedding_model"] == "Qwen/Qwen3-Embedding-0.6B"
     assert record["embedding_dimensions"] == 1024
     assert record["chunk_size"] == 512
     assert record["chunk_overlap"] == 64
