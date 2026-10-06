@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RAG_", hide_input_in_errors=True)
 
     embedding_model: Literal["Qwen/Qwen3-Embedding-0.6B"] = MODEL
-    embedding_dimensions: Literal[1024] = 1024
+    embedding_dimensions: int = Field(default=1024, ge=1024, le=1024)
     embedding_timeout: float = Field(default=25, gt=0, le=300)
     embedding_batch_size: int = Field(default=32, ge=1, le=256)
     embedding_cache_path: Path = Path("/data/models")
