@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.7.0 (2026-10-06)
+
+### Features
+
+- Add independent Qwen embedding runtime (OP-524)
+  ([#7](https://github.com/SpencerRWood/rag-service/pull/7),
+  [`bd9aa3a`](https://github.com/SpencerRWood/rag-service/commit/bd9aa3ac20f15a557f7f32f88856c73df335848e))
+
+
 ## v0.6.0 (2026-10-06)
 
 ### Features
