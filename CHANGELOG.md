@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.2 (2026-10-09)
+
+### Bug Fixes
+
+- Include architecture metadata in released artifacts
+  ([`1c2e196`](https://github.com/SpencerRWood/rag-service/commit/1c2e1968ba966028a9cd102f945d46e80ea49281))
+
+
 ## v0.7.1 (2026-10-06)
 
 ### Bug Fixes
