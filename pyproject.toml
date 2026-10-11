@@ -166,6 +166,10 @@ major_on_zero = false
 tag_format = "v{version}"
 version_toml = ["pyproject.toml:project.version"]
 
+[tool.semantic_release.branches.main]
+match = "^main$"
+prerelease = false
+
 [tool.semantic_release.commit_parser_options]
 minor_tags = ["feat"]
 patch_tags = ["fix", "perf"]

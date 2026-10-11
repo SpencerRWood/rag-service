@@ -2,7 +2,9 @@ name: Validate
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'release/v*']
+  push:
+    branches: ['release/v*']
 
 permissions:
   contents: read
