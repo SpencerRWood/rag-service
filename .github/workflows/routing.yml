@@ -1,0 +1,56 @@
+{
+  "name": "PR routing",
+  "on": {
+    "pull_request": {
+      "branches": [
+        "development",
+        "main"
+      ]
+    }
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "jobs": {
+    "routing": {
+      "name": "pr-routing",
+      "runs-on": "ubuntu-latest",
+      "outputs": {
+        "incident": "${{ steps.route.outputs.incident }}",
+        "approval": "${{ steps.route.outputs.approval }}"
+      },
+      "steps": [
+        {
+          "uses": "actions/checkout@v6",
+          "with": {
+            "ref": "${{ github.event.pull_request.head.sha }}",
+            "fetch-depth": 0,
+            "persist-credentials": false
+          }
+        },
+        {
+          "uses": "actions/setup-python@v6",
+          "with": {
+            "python-version": "3.14"
+          }
+        },
+        {
+          "uses": "astral-sh/setup-uv@v9.0.0"
+        },
+        {
+          "name": "Install approved Wood tools",
+          "env": {
+            "WOOD_REVISION": "886832dd2bdceb48e32e31e5cfcc5774ef2281f9",
+            "GH_TOKEN": "${{ github.token }}"
+          },
+          "run": "set -euo pipefail\ngh auth setup-git\ngit init \"$RUNNER_TEMP/wood-tools\"\ngit -C \"$RUNNER_TEMP/wood-tools\" remote add origin https://github.com/SpencerRWood/wood-tools.git\ngit -C \"$RUNNER_TEMP/wood-tools\" fetch --depth 1 origin \"$WOOD_REVISION\"\ngit -C \"$RUNNER_TEMP/wood-tools\" checkout --detach FETCH_HEAD\ntest \"$(git -C \"$RUNNER_TEMP/wood-tools\" rev-parse HEAD)\" = \"$WOOD_REVISION\"\nuv sync --frozen --directory \"$RUNNER_TEMP/wood-tools\"\necho \"$RUNNER_TEMP/wood-tools/.venv/bin\" >> \"$GITHUB_PATH\""
+        },
+        {
+          "id": "route",
+          "name": "Verify PR routing and ancestry",
+          "run": "wood repo route --event-file \"$GITHUB_EVENT_PATH\" --github-output \"$GITHUB_OUTPUT\" --json"
+        }
+      ]
+    }
+  }
+}
