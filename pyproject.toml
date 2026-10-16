@@ -1,196 +1,127 @@
-[build-system]
-requires = ["hatchling>=1.27"]
-build-backend = "hatchling.build"
+["build-system"]
+"requires" = ["hatchling>=1.27"]
+"build-backend" = "hatchling.build"
 
-[project]
-name = "rag-service"
-version = "0.7.2"
-description = "Source-backed document ingestion and retrieval API."
-readme = "README.md"
-requires-python = ">=3.14"
-authors = [
-  { name = "Spencer Wood" },
-]
-classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.14",
-  "Typing :: Typed",
-]
-dependencies = [
-  "fastapi",
-  "uvicorn[standard]",
-  "dagster==1.13.24",
-  "dagster-postgres==0.29.24",
-  "sqlalchemy==2.0.54",
-  "psycopg2-binary==2.9.13",
-  "alembic>=1.16",
-  "pydantic-settings>=2.10",
-  "pgvector>=0.4",
-  "boto3>=1.40",
-  "python-multipart>=0.0.32",
-  "pypdf>=6.19.0",
-  "python-docx>=1.2.0",
-  "beautifulsoup4>=4.15.0",
-  "openpyxl>=3.1.5",
-  "llama-index-core>=0.14.25",
-  "httpx>=0.28.1",
-  "mcp>=1.26,<2",
-  "prometheus-client>=0.22,<1",
-]
+["project"]
+"name" = "rag-service"
+"version" = "0.7.2"
+"description" = "Source-backed document ingestion and retrieval API."
+"readme" = "README.md"
+"requires-python" = ">=3.14"
+"authors" = [{ "name" = "Spencer Wood" }]
+"classifiers" = ["Development Status :: 3 - Alpha", "Intended Audience :: Developers", "License :: OSI Approved :: MIT License", "Programming Language :: Python :: 3", "Programming Language :: Python :: 3.14", "Typing :: Typed"]
+"dependencies" = ["fastapi", "uvicorn[standard]", "dagster==1.13.24", "dagster-postgres==0.29.24", "sqlalchemy==2.0.54", "psycopg2-binary==2.9.13", "alembic>=1.16", "pydantic-settings>=2.10", "pgvector>=0.4", "boto3>=1.40", "python-multipart>=0.0.32", "pypdf>=6.19.0", "python-docx>=1.2.0", "beautifulsoup4>=4.15.0", "openpyxl>=3.1.5", "llama-index-core>=0.14.25", "httpx>=0.28.1", "mcp>=1.26,<2", "prometheus-client>=0.22,<1"]
 
-[dependency-groups]
-dev = [
-  "httpx",
-  "moto[s3]>=5",
-  "boto3-stubs[s3]",
-  "gitpython>=3.1.61",
-  "coverage[toml]",
-  "mypy",
-  "pre-commit",
-  "pytest",
-  "pytest-cov",
-  "python-semantic-release",
-  "ruff",
-  "types-beautifulsoup4>=4.12.0.20250516",
-  "types-openpyxl>=3.1.5.20260827",
-  "dagster-graphql==1.13.24",
-]
+["dependency-groups"]
+"dev" = ["httpx", "moto[s3]>=5", "boto3-stubs[s3]", "gitpython>=3.1.61", "coverage[toml]", "mypy", "pre-commit", "pytest", "pytest-cov", "python-semantic-release", "ruff", "types-beautifulsoup4>=4.12.0.20250516", "types-openpyxl>=3.1.5.20260827", "dagster-graphql==1.13.24"]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/rag_service"]
+["tool"]
 
-[tool.wood.openproject]
-project_id = 3
-initiative_id = 418
+["tool"."hatch"]
 
-[tool.wood.workflow]
-output_directory = "/private/tmp"
+["tool"."hatch"."build"]
 
-[tool.wood.verify]
-version = 1
-retry_safe = true
+["tool"."hatch"."build"."targets"]
 
-[[tool.wood.verify.checks]]
-name = "dev-ingestion-retrieval-mcp"
-argv = ["uv", "run", "python", "-m", "rag_service.verification"]
-timeout_seconds = 60
-required = true
+["tool"."hatch"."build"."targets"."wheel"]
+"packages" = ["src/rag_service"]
 
-[tool.dagster]
-module_name = "rag_service.dagster.definitions"
-code_location_name = "rag-service"
+["tool"."hatch"."build"."targets"."sdist"]
+"exclude" = ["/.github", "/.gitignore", "/.pre-commit-config.yaml", "/.python-version", "/uv.lock"]
 
-[tool.hatch.build.targets.sdist]
-exclude = [
-  "/.github",
-  "/.gitignore",
-  "/.pre-commit-config.yaml",
-  "/.python-version",
-  "/uv.lock",
-]
+["tool"."wood"]
 
-[tool.pytest.ini_options]
-addopts = [
-  "--strict-config",
-  "--strict-markers",
-]
-testpaths = ["tests"]
+["tool"."wood"."openproject"]
+"project_id" = 3
+"initiative_id" = 418
 
-[tool.coverage.run]
-branch = true
-source = ["rag_service"]
+["tool"."wood"."workflow"]
+"output_directory" = "/private/tmp"
 
-[tool.coverage.report]
-fail_under = 90
-show_missing = true
-skip_covered = true
+["tool"."wood"."verify"]
+"version" = 1
+"retry_safe" = true
+"checks" = [{ "name" = "dev-ingestion-retrieval-mcp", "argv" = ["uv", "run", "python", "-m", "rag_service.verification"], "timeout_seconds" = 60, "required" = true }]
 
-[tool.ruff]
-line-length = 88
-target-version = "py314"
-src = ["src", "tests"]
+["tool"."wood"."architecture"]
+"domain" = "platform-services"
+"capability" = "knowledge-retrieval"
+"kind" = "api-service"
 
-[tool.ruff.lint]
-select = [
-  "A",
-  "ARG",
-  "B",
-  "C4",
-  "DTZ",
-  "E",
-  "ERA",
-  "F",
-  "I",
-  "N",
-  "PL",
-  "PT",
-  "PTH",
-  "RET",
-  "RUF",
-  "S",
-  "SIM",
-  "T20",
-  "UP",
-  "W",
-]
-ignore = [
-  "PLR2004",
-]
+["tool"."wood"."branching"]
+"strategy" = "integration"
+"release_id" = 26
+"integration_branch" = "development"
+"scope_reference" = "https://projects.woodhost.cloud/work_packages/558 activity 1481; canonical fleet migration authorized 2026-10-15; protected-main merges remain separately approved."
 
-[tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = [
-  "S101",
-]
+["tool"."dagster"]
+"module_name" = "rag_service.dagster.definitions"
+"code_location_name" = "rag-service"
 
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-line-ending = "auto"
+["tool"."pytest"]
 
-[tool.mypy]
-python_version = "3.14"
-strict = true
-warn_unused_configs = true
-mypy_path = "src"
-files = ["src", "tests"]
+["tool"."pytest"."ini_options"]
+"addopts" = ["--strict-config", "--strict-markers"]
+"testpaths" = ["tests"]
 
-[tool.semantic_release]
-commit_parser = "conventional"
-commit_message = "chore(release): {version}\n\nAutomatically generated by python-semantic-release"
-build_command = "uv build"
-allow_zero_version = true
-major_on_zero = false
-tag_format = "v{version}"
-version_toml = ["pyproject.toml:project.version"]
+["tool"."coverage"]
 
-[tool.semantic_release.commit_parser_options]
-minor_tags = ["feat"]
-patch_tags = ["fix", "perf"]
-parse_squash_commits = true
-ignore_merge_commits = true
+["tool"."coverage"."run"]
+"branch" = true
+"source" = ["rag_service"]
 
-[tool.semantic_release.changelog]
-exclude_commit_patterns = [
-  '''chore(?:\([^)]*?\))?: .+''',
-  '''ci(?:\([^)]*?\))?: .+''',
-  '''docs(?:\([^)]*?\))?: .+''',
-  '''refactor(?:\([^)]*?\))?: .+''',
-  '''style(?:\([^)]*?\))?: .+''',
-  '''test(?:\([^)]*?\))?: .+''',
-  '''chore\(release\): .+''',
-]
+["tool"."coverage"."report"]
+"fail_under" = 90
+"show_missing" = true
+"skip_covered" = true
 
-[tool.semantic_release.remote]
-type = "github"
-token = { env = "GITHUB_TOKEN" }
+["tool"."ruff"]
+"line-length" = 88
+"target-version" = "py314"
+"src" = ["src", "tests"]
 
-[tool.semantic_release.publish]
-upload_to_vcs_release = true
+["tool"."ruff"."lint"]
+"select" = ["A", "ARG", "B", "C4", "DTZ", "E", "ERA", "F", "I", "N", "PL", "PT", "PTH", "RET", "RUF", "S", "SIM", "T20", "UP", "W"]
+"ignore" = ["PLR2004"]
 
-[tool.wood.architecture]
-domain = "platform-services"
-capability = "knowledge-retrieval"
-kind = "api-service"
+["tool"."ruff"."lint"."per-file-ignores"]
+"tests/**/*.py" = ["S101"]
+
+["tool"."ruff"."format"]
+"quote-style" = "double"
+"indent-style" = "space"
+"line-ending" = "auto"
+
+["tool"."mypy"]
+"python_version" = "3.14"
+"strict" = true
+"warn_unused_configs" = true
+"mypy_path" = "src"
+"files" = ["src", "tests"]
+
+["tool"."semantic_release"]
+"commit_parser" = "conventional"
+"commit_message" = "chore(release): {version}\n\nAutomatically generated by python-semantic-release"
+"build_command" = "uv build"
+"allow_zero_version" = true
+"major_on_zero" = false
+"tag_format" = "v{version}"
+"version_toml" = ["pyproject.toml:project.version"]
+
+["tool"."semantic_release"."commit_parser_options"]
+"minor_tags" = ["feat"]
+"patch_tags" = ["fix", "perf"]
+"parse_squash_commits" = true
+"ignore_merge_commits" = true
+
+["tool"."semantic_release"."changelog"]
+"exclude_commit_patterns" = ["chore(?:\\([^)]*?\\))?: .+", "ci(?:\\([^)]*?\\))?: .+", "docs(?:\\([^)]*?\\))?: .+", "refactor(?:\\([^)]*?\\))?: .+", "style(?:\\([^)]*?\\))?: .+", "test(?:\\([^)]*?\\))?: .+", "chore\\(release\\): .+"]
+
+["tool"."semantic_release"."remote"]
+"type" = "github"
+
+["tool"."semantic_release"."remote"."token"]
+"env" = "GITHUB_TOKEN"
+
+["tool"."semantic_release"."publish"]
+"upload_to_vcs_release" = true
