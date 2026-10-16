@@ -1,25 +1,26 @@
-version = 1
+"version" = 1
 
-[python]
-version = "3.14"
+["python"]
+"version" = "3.14"
 
-[validation]
-checks = ["ruff", "ruff-format", "mypy", "pytest", "pytest-coverage", "docker-compose", "pre-commit"]
+["validation"]
+"checks" = ["ruff", "ruff-format", "mypy", "pytest", "pytest-coverage", "docker-compose", "pre-commit"]
 
-[coverage]
-target = "rag_service"
+["coverage"]
+"target" = "rag_service"
 
-[build]
-python_package = true
+["build"]
+"python_package" = true
 
-[container]
-publish = true
-image_name = "rag-service"
+["container"]
+"publish" = true
+"image_name" = "rag-service"
 
-[dagster]
-runtime_validation = true
-smoke_job = "runtime_smoke_job"
-grpc_port = 4000
+["dagster"]
+"runtime_validation" = true
+"smoke_job" = "runtime_smoke_job"
+"grpc_port" = 4000
 
-[release]
-semantic_release = true
+["release"]
+"semantic_release" = true
+"tag_merged_commit" = true
