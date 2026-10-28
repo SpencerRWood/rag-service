@@ -23,7 +23,7 @@
     "promotion": {
       "needs": "release",
       "if": "${{ needs.release.outputs.released == 'true' }}",
-      "uses": "SpencerRWood/workflows/.github/workflows/promote-container-to-dev.yml@9748b1cd6287d84d55c4277c93ca5dae01fb1787",
+      "uses": "SpencerRWood/workflows/.github/workflows/promote-container-to-dev.yml@58d733734f334dd20802c3d24ca681b2b390c440",
       "permissions": {
         "contents": "read"
       },
@@ -36,7 +36,7 @@
         "version_image": "${{ needs.release.outputs.version_image }}",
         "image_digest": "${{ needs.release.outputs.image_digest }}",
         "version_image_digest": "${{ needs.release.outputs.version_image_digest }}",
-        "workflow_revision": "9748b1cd6287d84d55c4277c93ca5dae01fb1787"
+        "workflow_revision": "58d733734f334dd20802c3d24ca681b2b390c440"
       },
       "secrets": {
         "infrastructure_token": "${{ secrets.INFRASTRUCTURE_PR_TOKEN }}"
@@ -122,7 +122,7 @@
         "embedding"
       ],
       "if": "${{ needs.release.outputs.released == 'true' }}",
-      "uses": "SpencerRWood/workflows/.github/workflows/promote-container-to-dev.yml@9748b1cd6287d84d55c4277c93ca5dae01fb1787",
+      "uses": "SpencerRWood/workflows/.github/workflows/promote-container-to-dev.yml@58d733734f334dd20802c3d24ca681b2b390c440",
       "permissions": {
         "contents": "read"
       },
@@ -135,7 +135,7 @@
         "version_image": "ghcr.io/spencerrwood/rag-embedding:${{ needs.release.outputs.release_tag }}",
         "image_digest": "${{ needs.embedding.outputs.image_digest }}",
         "version_image_digest": "ghcr.io/spencerrwood/rag-embedding:${{ needs.release.outputs.release_tag }}@${{ needs.embedding.outputs.image_digest }}",
-        "workflow_revision": "9748b1cd6287d84d55c4277c93ca5dae01fb1787"
+        "workflow_revision": "58d733734f334dd20802c3d24ca681b2b390c440"
       },
       "secrets": {
         "infrastructure_token": "${{ secrets.INFRASTRUCTURE_PR_TOKEN }}"
