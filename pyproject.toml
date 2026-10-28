@@ -50,9 +50,9 @@
 
 ["tool"."wood"."branching"]
 "strategy" = "integration"
-"release_id" = 26
+"release_id" = 29
 "integration_branch" = "development"
-"scope_reference" = "https://projects.woodhost.cloud/work_packages/558 activity 1481; canonical fleet migration authorized 2026-10-15; protected-main merges remain separately approved."
+"scope_reference" = "Codex user approved the bounded shared promotion-helper pin rollout through development and main on 2026-10-28 under Documentation Automation planning release 29; retain existing RAG initiative, runtime configuration and branch protections."
 
 ["tool"."dagster"]
 "module_name" = "rag_service.dagster.definitions"
